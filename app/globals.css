@@ -91,23 +91,60 @@ h1, h2, h3, h4, .font-display {
 
   /* Glassy parchment-on-night panel used by most cards */
   .card {
-    @apply rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-sm shadow-[0_10px_40px_-20px_rgba(0,0,0,0.8)];
+    @apply rounded-2xl border border-white/10 bg-white/5 backdrop-blur-sm shadow-[0_10px_40px_-20px_rgba(0,0,0,0.8)];
   }
   .card-hover {
     @apply transition-all duration-300 hover:-translate-y-0.5 hover:border-gold-500/50 hover:shadow-glow;
   }
 
-  .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold tracking-wide transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50;
+  /* Buttons — plain CSS so variants can share the base without @apply-ing a custom class
+     (Tailwind v4 only allows @apply of real utilities). */
+  .btn,
+  .btn-gold,
+  .btn-outline,
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: 0.025em;
+    line-height: 1.25rem;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: color 0.2s, background-color 0.2s, border-color 0.2s, box-shadow 0.2s;
+  }
+  .btn:disabled,
+  .btn-gold:disabled,
+  .btn-outline:disabled,
+  .btn-ghost:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
   }
   .btn-gold {
-    @apply btn bg-gold-500 text-night-950 hover:bg-gold-400;
+    background: var(--color-gold-500);
+    color: var(--color-night-950);
+  }
+  .btn-gold:hover:not(:disabled) {
+    background: var(--color-gold-400);
   }
   .btn-outline {
-    @apply btn border border-gold-500/60 text-gold-300 hover:border-gold-400 hover:bg-gold-500/10;
+    border-color: color-mix(in srgb, var(--color-gold-500) 60%, transparent);
+    color: var(--color-gold-300);
+  }
+  .btn-outline:hover:not(:disabled) {
+    border-color: var(--color-gold-400);
+    background: color-mix(in srgb, var(--color-gold-500) 10%, transparent);
   }
   .btn-ghost {
-    @apply btn text-parchment-dim hover:bg-white/5 hover:text-parchment;
+    color: var(--color-parchment-dim);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-parchment);
   }
 
   .chip {
@@ -135,7 +172,7 @@ h1, h2, h3, h4, .font-display {
 
   /* Ornamental divider: —— ✦ —— */
   .divider {
-    @apply my-8 flex items-center gap-4 text-gold-600 before:h-px before:flex-1 before:bg-gradient-to-r before:from-transparent before:to-gold-600/60 after:h-px after:flex-1 after:bg-gradient-to-l after:from-transparent after:to-gold-600/60;
+    @apply my-8 flex items-center gap-4 text-gold-600 before:h-px before:flex-1 before:bg-linear-to-r before:from-transparent before:to-gold-600/60 after:h-px after:flex-1 after:bg-linear-to-l after:from-transparent after:to-gold-600/60;
   }
 }
 
