@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Self-contained server bundle for the Dockerfile (Vercel ignores this).
+  output: "standalone",
   images: {
     remotePatterns: [
       // hp-api character portraits
