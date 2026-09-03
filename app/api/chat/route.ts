@@ -1,12 +1,19 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { CHAT_MODEL, getAnthropic, isChatConfigured } from "@/lib/anthropic";
+import { getAnthropic } from "@/lib/anthropic";
 import { buildCharacterSystemPrompt } from "@/lib/chat-prompt";
 import { getCharacterById } from "@/lib/hp-api";
+import { getChatProvider, LlmHttpError, type CharacterStream, type ChatProvider } from "@/lib/llm";
+import { openOpenAiCompatibleStream } from "@/lib/llm-openai";
 import type { ChatMessage } from "@/lib/types";
 
 /**
- * POST /api/chat — streams an in-character reply from Claude as plain text.
+ * POST /api/chat — streams an in-character reply as plain text.
  * GET  /api/chat — reports whether the feature is configured on this server.
+ *
+ * The reply comes from whichever backend lib/llm.ts selects: Claude through the
+ * Anthropic SDK, or any OpenAI-compatible endpoint — a local model served by
+ * Ollama / LM Studio, or a hosted gateway such as Groq or OpenRouter. Either
+ * way the model is called from the server only.
  *
  * Body: { characterId: string, messages: ChatMessage[] } (≤ 20 messages, each
  * 1–2000 chars, roles user/assistant, last one from the user).
@@ -28,7 +35,11 @@ function errorJson(status: number, error: string, message: string): Response {
 }
 
 export async function GET(): Promise<Response> {
-  return Response.json({ configured: isChatConfigured() }, { headers: NO_STORE });
+  const provider = getChatProvider();
+  return Response.json(
+    { configured: provider !== null, provider: provider?.label ?? null },
+    { headers: NO_STORE },
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -90,25 +101,20 @@ function parseChatRequest(raw: unknown): Parsed {
 /* ------------------------------------------------------------------ */
 
 /**
- * The parts of MessageStream / BetaMessageStream this route relies on, so the
- * same piping code serves both the beta (refusal-fallback) and plain streams.
- */
-interface CharacterStream {
-  on(event: "text", listener: (textDelta: string, textSnapshot: string) => void): unknown;
-  finalMessage(): Promise<{ stop_reason: string | null }>;
-  abort(): void;
-}
-
-/**
- * Opens the upstream stream and waits for the HTTP response so auth / rate
+ * Opens an Anthropic stream and waits for the HTTP response so auth / rate
  * limit / API errors can still be mapped to a proper status code. Uses the
  * server-side refusal fallback (beta) first; if the configured model rejects
  * that parameter with a 400, retries once with the plain Messages API.
  */
-async function openCharacterStream(client: Anthropic, systemPrompt: string, history: ChatMessage[]) {
+async function openAnthropicStream(
+  client: Anthropic,
+  model: string,
+  systemPrompt: string,
+  history: ChatMessage[],
+) {
   const messages = history.map(({ role, content }): Anthropic.MessageParam => ({ role, content }));
   const params = {
-    model: CHAT_MODEL,
+    model,
     max_tokens: MAX_TOKENS,
     system: [{ type: "text" as const, text: systemPrompt, cache_control: { type: "ephemeral" as const } }],
     messages,
@@ -199,8 +205,39 @@ function pipeToResponse(stream: CharacterStream, requestSignal: AbortSignal): Re
   });
 }
 
-/** Maps SDK errors raised before any bytes were streamed to HTTP responses. */
+/** Opens a stream on whichever backend is configured. */
+function openCharacterStream(
+  provider: ChatProvider,
+  systemPrompt: string,
+  history: ChatMessage[],
+): Promise<CharacterStream> {
+  if (provider.kind === "openai-compatible") {
+    return openOpenAiCompatibleStream(provider, systemPrompt, history, MAX_TOKENS);
+  }
+  return openAnthropicStream(getAnthropic(), provider.model, systemPrompt, history);
+}
+
+/** Maps upstream errors raised before any bytes were streamed to HTTP responses. */
 function mapUpstreamError(err: unknown): Response {
+  if (err instanceof LlmHttpError) {
+    if (err.status === 401 || err.status === 403) {
+      console.error("[api/chat] LLM endpoint rejected the server credentials:", err.status, err.message);
+      return errorJson(503, "chat_misconfigured", "The server's LLM credentials were rejected. Check LLM_API_KEY.");
+    }
+    if (err.status === 429) {
+      return errorJson(429, "rate_limited", "Too many owls at once — try again in a moment.");
+    }
+    if (err.status === 404) {
+      console.error("[api/chat] model missing on the LLM endpoint:", err.message);
+      return errorJson(
+        503,
+        "chat_misconfigured",
+        "The configured model is not available on the LLM endpoint. Check LLM_MODEL (with Ollama, run `ollama pull <model>`).",
+      );
+    }
+    console.error("[api/chat] LLM endpoint error:", err.status, err.message);
+    return errorJson(502, "upstream_error", "The owl post could not reach the model. Please try again.");
+  }
   if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
     console.error("[api/chat] Anthropic rejected the server credentials:", err.status, err.message);
     return errorJson(503, "chat_misconfigured", "The server's Anthropic API key was rejected. Check ANTHROPIC_API_KEY.");
@@ -242,13 +279,18 @@ export async function POST(request: Request): Promise<Response> {
   }
   if (!character) return errorJson(404, "character_not_found", "No character with that id exists.");
 
-  if (!isChatConfigured()) {
-    return errorJson(503, "chat_not_configured", "Set ANTHROPIC_API_KEY to enable chat.");
+  const provider = getChatProvider();
+  if (!provider) {
+    return errorJson(
+      503,
+      "chat_not_configured",
+      "Chat is disabled: set ANTHROPIC_API_KEY, or point LLM_BASE_URL at an OpenAI-compatible server (a local Ollama works).",
+    );
   }
 
   let stream: CharacterStream;
   try {
-    stream = await openCharacterStream(getAnthropic(), buildCharacterSystemPrompt(character), messages);
+    stream = await openCharacterStream(provider, buildCharacterSystemPrompt(character), messages);
   } catch (err) {
     return mapUpstreamError(err);
   }

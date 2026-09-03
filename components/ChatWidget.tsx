@@ -17,7 +17,8 @@ import type { Character, ChatMessage } from "@/lib/types";
 import { cn, initials } from "@/lib/utils";
 
 /**
- * Chat with a character, streamed from /api/chat (Claude, in character).
+ * Chat with a character, streamed from /api/chat. The backend may be Claude or
+ * any OpenAI-compatible model (including a local one); the header shows which.
  * The transcript lives in sessionStorage per character so it survives
  * navigating away and back within the tab.
  */
@@ -146,6 +147,8 @@ export function ChatWidget({ character }: { character: Character }) {
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState<ChatError | null>(null);
   const [configured, setConfigured] = useState<boolean | null>(null);
+  /** Human-readable name of the active model, e.g. "llama3.2:1b (local)". */
+  const [providerLabel, setProviderLabel] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -168,8 +171,9 @@ export function ChatWidget({ character }: { character: Character }) {
     const controller = new AbortController();
     fetch("/api/chat", { signal: controller.signal, cache: "no-store" })
       .then((res) => (res.ok ? res.json() : null))
-      .then((data: { configured?: boolean } | null) => {
+      .then((data: { configured?: boolean; provider?: string | null } | null) => {
         if (data && typeof data.configured === "boolean") setConfigured(data.configured);
+        if (data && typeof data.provider === "string") setProviderLabel(data.provider);
       })
       .catch(() => {
         /* offline or aborted — the send path reports errors itself */
@@ -332,7 +336,9 @@ export function ChatWidget({ character }: { character: Character }) {
           <h3 id={headingId} className="truncate font-display text-lg font-semibold text-gold-200">
             Chat with {character.name}
           </h3>
-          <p className="text-xs uppercase tracking-[0.2em] text-parchment-dim">In character · powered by Claude</p>
+          <p className="truncate text-xs uppercase tracking-[0.2em] text-parchment-dim">
+            In character{providerLabel ? ` · ${providerLabel}` : ""}
+          </p>
         </div>
         {hydrated && transcript.length > 0 && (
           <button type="button" onClick={clear} className="btn-ghost px-3 py-1.5 text-xs" aria-label="Clear conversation">
@@ -354,8 +360,10 @@ export function ChatWidget({ character }: { character: Character }) {
           <div className="rounded-xl border border-gold-500/30 bg-gold-500/10 px-4 py-4 text-sm leading-relaxed text-parchment">
             <p className="font-display text-gold-300">The owl post is closed for now.</p>
             <p className="mt-1 text-muted">
-              This demo needs an <code className="rounded bg-night-900/80 px-1 py-0.5 text-gold-200">ANTHROPIC_API_KEY</code>{" "}
-              on the server to let {character.name} reply.
+              To let {character.name} reply, the server needs a language model: either an{" "}
+              <code className="rounded bg-night-900/80 px-1 py-0.5 text-gold-200">ANTHROPIC_API_KEY</code>, or{" "}
+              <code className="rounded bg-night-900/80 px-1 py-0.5 text-gold-200">LLM_BASE_URL</code> pointing at any
+              OpenAI-compatible server — a local model run with Ollama works and costs nothing.
             </p>
           </div>
         ) : (
@@ -363,8 +371,8 @@ export function ChatWidget({ character }: { character: Character }) {
           (transcript.length === 0 && (
             <p className="text-sm leading-relaxed text-muted">
               Write a short letter to {firstName}
-              {house ? ` of ${house.name}` : ""}. Replies are written in character by Claude and may not always be
-              accurate to the books.
+              {house ? ` of ${house.name}` : ""}. Replies are written in character by a language model and may not
+              always be accurate to the books.
             </p>
           ))
         )}
