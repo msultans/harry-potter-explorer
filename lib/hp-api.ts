@@ -17,7 +17,9 @@ import type { Character, CharacterQuery, HouseName, Paginated, Spell } from "./t
  *    stale data instead of a 500.
  */
 
-const BASE = (process.env.HP_API_BASE_URL ?? "https://hp-api.onrender.com/api").replace(/\/+$/, "");
+// `||`, not `??`: container runtimes commonly inject an empty string for an
+// unset variable, and an empty base URL would make every request unparsable.
+const BASE = (process.env.HP_API_BASE_URL?.trim() || "https://hp-api.onrender.com/api").replace(/\/+$/, "");
 const REVALIDATE_SECONDS = 3600;
 export const DEFAULT_PAGE_SIZE = 24;
 export const MAX_PAGE_SIZE = 100;

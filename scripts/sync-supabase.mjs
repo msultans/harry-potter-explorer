@@ -40,7 +40,7 @@ function loadDotEnv(file) {
 
 loadDotEnv(resolve(ROOT, ".env.local"));
 
-const baseUrl = (process.env.SYNC_URL ?? "http://localhost:3000").replace(/\/+$/, "");
+const baseUrl = (process.env.SYNC_URL?.trim() || "http://localhost:3000").replace(/\/+$/, "");
 const secret = (process.env.SYNC_SECRET ?? "").trim();
 
 if (!secret) {
