@@ -72,7 +72,7 @@ function characterFacts(character: Character): string[] {
 }
 
 /**
- * System prompt that turns Claude into this character. Deterministic for a
+ * System prompt that turns the model into this character. Deterministic for a
  * given character so the block can be prompt-cached across turns.
  */
 export function buildCharacterSystemPrompt(character: Character): string {

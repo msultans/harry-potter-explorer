@@ -1,0 +1,55 @@
+# Full stack for a server: the Next.js app plus its own Ollama instance.
+#
+#   docker compose up -d --build
+#
+# The app is served on http://localhost:3000. On first start `model-puller`
+# downloads the model (~1.3 GB for the default); the site works immediately and
+# the chat widget explains that the model is still on its way.
+
+name: harry-potter-explorer
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    # No published port: only the app talks to Ollama, over the internal
+    # network. Add `ports: ["11434:11434"]` if you want to reach it yourself.
+    volumes:
+      - ollama-models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  # One-shot: downloads the model into the shared volume, then exits.
+  model-puller:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["ollama", "pull", "${OLLAMA_MODEL:-llama3.2:1b}"]
+    restart: "no"
+
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
+      # Optional extras — set them in a .env file next to this one.
+      HP_API_BASE_URL: ${HP_API_BASE_URL:-}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      SYNC_SECRET: ${SYNC_SECRET:-}
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+volumes:
+  ollama-models:

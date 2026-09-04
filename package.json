@@ -11,7 +11,6 @@
     "sync": "node scripts/sync-supabase.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.123.0",
     "@supabase/supabase-js": "^2.114.0",
     "next": "16.3.4",
     "react": "19.2.8",
