@@ -67,7 +67,7 @@
 Требуется Node.js версии 20.9 или новее.
 
 ```bash
-git clone https://github.com/smurzabekov/harry-potter-explorer.git
+git clone https://github.com/msultans/harry-potter-explorer.git
 cd harry-potter-explorer
 npm install
 npm run dev
@@ -263,7 +263,7 @@ docker-compose.yml стек «приложение + Ollama» для серве�
 Подходит для любого VPS, а также для Railway, Render, DigitalOcean и Fly.io.
 
 ```bash
-git clone https://github.com/smurzabekov/harry-potter-explorer.git
+git clone https://github.com/msultans/harry-potter-explorer.git
 cd harry-potter-explorer
 docker compose up -d --build
 ```
