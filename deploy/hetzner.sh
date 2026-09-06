@@ -32,6 +32,17 @@ run true || { echo "Cannot reach $TARGET over SSH with the keys you already have
 say "Server details"
 run 'echo "  $(. /etc/os-release && echo "$PRETTY_NAME")"; echo "  CPU: $(nproc) cores"; echo "  RAM: $(free -h | awk "/^Mem:/ {print \$2}")"; echo "  Disk free: $(df -h / | awk "NR==2 {print \$4}")"'
 
+# A 4 GB server has no swap by default, and `next build` next to an image build
+# can exhaust it. 2 GB of swap costs nothing and turns an OOM kill into slowness.
+say "Ensuring swap exists"
+run 'if [ "$(swapon --show --noheadings | wc -l)" -eq 0 ]; then
+       fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap -q /swapfile && swapon /swapfile
+       grep -q "^/swapfile" /etc/fstab || echo "/swapfile none swap sw 0 0" >> /etc/fstab
+       echo "  2 GB swap added"
+     else
+       echo "  swap already present"
+     fi'
+
 say "Installing Docker if it is missing"
 run 'command -v docker >/dev/null 2>&1 || (curl -fsSL https://get.docker.com | sh)'
 run 'docker --version && docker compose version'
